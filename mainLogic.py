@@ -33,24 +33,25 @@ retriever = vectorStoring.as_retriever()
 #STT not used now but goes here
 
 def is_prompt_safe(prompt):
-   prompt = prompt.lower()
-   message = config['prompts']['secure'].format(prompt = message)
+   prompt_lower = prompt.lower()
+   message = config['prompts']['secure'].format(message = prompt_lower)
    answer = agentModel.invoke([('human', message)])
-   return not ("unsafe" in answer.lower())
+   return not ("unsafe" in answer.content.lower())
 
 
+# Contesti chef
 context = [
     ('system', config['prompts']['default']),
     ('system', '')
 ]
 
 context1 = [
-    ('system', config['prompts']['giove']),
+    ('system', config['prompts']['Cannavacciuolo']),
     ('system', '')
 ]
 
 context2 = [
-    ('system', config['prompts']['zeus']),
+    ('system', config['prompts']['MysteryChef']),
     ('system', '')
 ]
 
@@ -61,13 +62,13 @@ context3 = [
 
 
 contextDictionary = {
-   'Giove': context1,
-   'Zeus': context2,
+   'Cannavacciuolo': context1,
+   'MysteryChef': context2,
    'Ade': context3
 }
 private_contexts = {
-   'Giove': [('system', config['prompts']['giove']), ('system', '')],
-   'Zeus': [('system', config['prompts']['zeus']), ('system', '')],
+   'Cannavacciuolo': [('system', config['prompts']['Cannavacciuolo']), ('system', '')],
+   'MysteryChef': [('system', config['prompts']['MysteryChef']), ('system', '')],
    'Ade': [('system', config['prompts']['ade']), ('system', '')]
 }
 
@@ -89,7 +90,7 @@ def format_contexts(contexts):
    if not contexts:
       return ""
 
-   formatted = "\n\n--- CONVERSAZIONI DEGLI ALTRI PERSONAGGI (per tua informazione) ---\n"
+   formatted = "\n\n--- CONVERSAZIONI DEGLI ALTRI CHEF (per tua informazione) ---\n"
    for ctx in contexts:
       formatted += f"\n{ctx['character']}:\n"
       for role, content in ctx['messages']:
@@ -97,7 +98,7 @@ def format_contexts(contexts):
             formatted += f"  Utente: {content}\n"
          elif role == 'ai':
             formatted += f"  {ctx['character']}: {content}\n"
-   formatted += "\n--- FINE CONVERSAZIONI ALTRI PERSONAGGI ---\n"
+   formatted += "\n--- FINE CONVERSAZIONI ALTRI CHEF ---\n"
    return formatted
 
 
@@ -118,7 +119,7 @@ def generate_answer(user_prompt):
    #Retrieve relevant documents from RAG
    relevantDocs = retriever.invoke(user_prompt)
    doc_text = "\n".join([d.page_content for d in relevantDocs])
-   doc_text = "Usa questo testo per rispondere alla domanda:\n" + doc_text + "\nSe non conosci la risposta, dì che non lo sai.\n"
+   doc_text = "Usa queste informazioni sulle ricette per rispondere alla domanda:\n" + doc_text + "\nSe non conosci la risposta, dì che non lo sai.\n"
    context[1] = ('system', doc_text)
 
    answer = agentModel.invoke(context).content
@@ -140,7 +141,7 @@ def generate_answerMC(user_prompt, character_name, is_private=False):
 
    relevantDocs = retriever.invoke(user_prompt)
    doc_text = "\n".join([d.page_content for d in relevantDocs])
-   doc_text = "Usa questo testo per rispondere alla domanda:\n" + doc_text + "\nSe non conosci la risposta, dì che non lo sai.\n"
+   doc_text = "Usa queste informazioni sulle ricette per rispondere alla domanda:\n" + doc_text + "\nSe non conosci la risposta, dì che non lo sai.\n"
    
    if not is_private:
       other_contexts = get_contexts(character_name)
@@ -169,25 +170,25 @@ def question():
                    'ai': 'yes'
                    })
 
-@app.route('/giove', methods=['POST'])
-def giove():
+@app.route('/cannavacciuolo', methods=['POST'])
+def cannavacciuolo():
    userPrompt = request.get_json()
    answer = userPrompt.get('question', 'No question')
    is_private = userPrompt.get('private', False)
-   responseText = generate_answerMC(answer, 'Giove', is_private)
+   responseText = generate_answerMC(answer, 'Cannavacciuolo', is_private)
    return jsonify({'answer': responseText,
-                   'char': 'giove'
+                   'char': 'cannavacciuolo'
                    })
 
 
-@app.route('/zeus', methods=['POST'])
-def zeus():
+@app.route('/mysterychef', methods=['POST'])
+def mysterychef():
    userPrompt = request.get_json()
    answer = userPrompt.get('question', 'No question')
    is_private = userPrompt.get('private', False)
-   responseText = generate_answerMC(answer, 'Zeus', is_private)
+   responseText = generate_answerMC(answer, 'MysteryChef', is_private)
    return jsonify({'answer': responseText,
-                   'char': 'zeus'
+                   'char': 'mysterychef'
                    })
 
 @app.route('/ade', methods=['POST'])
@@ -205,4 +206,3 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 if __name__ == "__main__":
    app.run(host='0.0.0.0', port=config['server_portc'], debug=True)
-

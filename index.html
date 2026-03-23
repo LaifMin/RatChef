@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title >AI CHAT - SIMPLE VERSION </title>
+    <title>RatChef AI - Chat con i Grandi Chef</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,8 +13,8 @@
         }
 
         body {
-            background-color: rgb(13, 15, 19);
-            font-family: Arial, sans-serif;
+            background-color: #0d0f13;
+            font-family: 'Outfit', Arial, sans-serif;
             height: 100vh;
             display: flex;
             flex-direction: column;
@@ -21,9 +22,9 @@
 
         /* Header */
         header {
-            background-color: rgb(20, 22, 27);
-            padding: 15px 20px;
-            border-bottom: 1px solid #333;
+            background: linear-gradient(135deg, #1a1c23 0%, #14161b 100%);
+            padding: 15px 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -31,10 +32,38 @@
         }
 
         #title {
-            color: white;
-            font-size: 24px;
+            font-size: 22px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #f5a623, #e8791d);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        #char-index {
+            color: #aaa;
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        #display-char-tt {
+            font-weight: 600;
+            font-size: 16px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        /* Character colors */
+        .char-cannavacciuolo { color: #ff6b35; background: rgba(255,107,53,0.15); }
+        .char-mysterychef { color: #a366ff; background: rgba(163,102,255,0.15); }
+        .char-ade { color: #4ecdc4; background: rgba(78,205,196,0.15); }
 
         /* Chat messages area */
         #answers {
@@ -42,101 +71,168 @@
             overflow-y: auto;
             padding: 20px;
             color: white;
+            scroll-behavior: smooth;
+        }
+
+        #answers::-webkit-scrollbar {
+            width: 6px;
+        }
+        #answers::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #answers::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
         }
 
         #answers p {
-            margin: 10px 0;
-            padding: 10px 15px;
-            border-radius: 8px;
-            max-width: 70%;
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 75%;
             word-wrap: break-word;
             color: white;
+            font-size: 14px;
+            line-height: 1.5;
+            animation: fadeIn 0.3s ease;
         }
 
-        #answers p[style*="right"] {
-            background-color: #1e3a5f;
-            margin-left: auto;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        #answers p[style*="left"] {
-            background-color: #2a2d32;
-            margin-right: auto;
+        .msg-user {
+            background: linear-gradient(135deg, #1e3a5f, #1a3050) !important;
+            margin-left: auto !important;
+            text-align: right;
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg-ai {
+            background: rgba(255,255,255,0.06) !important;
+            margin-right: auto !important;
+            text-align: left;
+            border-bottom-left-radius: 4px;
+            border-left: 3px solid #f5a623;
+        }
+
+        .msg-private {
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .msg-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .msg-ai .msg-label { color: #f5a623; }
+        .msg-user .msg-label { color: #6ba3d6; }
+
+        /* Input form */
+        #chatForm {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #1a1c23 0%, #14161b 100%);
+            display: flex;
+            gap: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            align-items: center;
         }
 
         input[type="text"] {
             flex: 1;
-            padding: 12px 15px;
-            background-color: rgb(30, 33, 39);
-            border: 1px solid #444;
-            border-radius: 8px;
+            padding: 12px 16px;
+            background-color: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
             color: white;
-            font-size: 16px;
+            font-size: 14px;
+            font-family: 'Outfit', sans-serif;
+            transition: border-color 0.3s, background-color 0.3s;
         }
 
         input[type="text"]:focus {
             outline: none;
-            border-color: #1e3a5f;
+            border-color: #f5a623;
+            background-color: rgba(255,255,255,0.08);
         }
 
-        /* Info message */
-        .info-message {
-            background-color: #1e2a3a;
-            border-left: 3px solid #2196F3;
-            padding: 12px 15px;
-            margin: 10px 0;
-            border-radius: 5px;
-            color: #aaa;
-            font-size: 14px;
+        input[type="text"]::placeholder {
+            color: #666;
         }
-
-        /* Input form */
-        #chatForm {
-            padding: 20px;
-            background-color: rgb(20, 22, 27);
-            display: flex;
-            gap: 10px;
-            border-top: 1px solid #333;
-        }
-
-      
 
         button {
             padding: 12px 20px;
-            background-color: #1e3a5f;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
+            font-size: 14px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            transition: all 0.3s ease;
         }
 
-        button:hover:not(:disabled) {
-            background-color: #2a4d7a;
+        #sendBt {
+            background: linear-gradient(135deg, #f5a623, #e8791d);
+        }
+        #sendBt:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(245,166,35,0.3);
+        }
+
+        #changeBt {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+        #changeBt:hover:not(:disabled) {
+            background: rgba(255,255,255,0.12);
         }
 
         button:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
+            transform: none !important;
         }
 
-        #display-char-tt{
-            color: white;
+        .whisper-label {
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            user-select: none;
         }
 
-        #char-index{
-            color: white;
+        .whisper-label input[type="checkbox"] {
+            accent-color: #f5a623;
         }
-       
+
+        /* Loading animation */
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        @keyframes dots {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+        }
     </style>
 </head>
 <body>
     <header>
-        <br id = "title">Welcome to AI CHAT - SIMPLE VERSION</br>
-        <div >
-            <h1 id = "char-index"> Talking to: 
-                <span class="current-char" id="display-char-tt"> Alice </span>
-            </h1>
+        <span id="title">🐀 RatChef AI</span>
+        <div class="header-right">
+            <span id="char-index">Stai parlando con:</span>
+            <span class="current-char char-cannavacciuolo" id="display-char-tt">Cannavacciuolo</span>
         </div>
     </header>
 
@@ -145,24 +241,30 @@
     </div>
 
     <form id="chatForm" onsubmit="sendMessageUP(event)">
-        <input type="text" name="message" id="chatMessage" placeholder="Scrivi il tuo quesito...">
+        <input type="text" name="message" id="chatMessage" placeholder="Chiedi una ricetta, un consiglio culinario...">
         <button type="submit" id="sendBt">Invia</button>
-        <button type="button" id="changeBt" onclick="swapCharacter()">Change</button>
-        <label style="color:white; display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" id="privateChat"> Whisper
+        <button type="button" id="changeBt" onclick="swapCharacter()">Cambia Chef</button>
+        <label class="whisper-label">
+            <input type="checkbox" id="privateChat"> Sussurra
         </label>
     </form>
 
     <script>
 
-        const characters = ['giove', 'zeus', 'ade'];
+        const characters = ['cannavacciuolo', 'mysterychef', 'ade'];
         let currentCharIndex = 0;
-        const characterClasses = ['char-giove', 'char-zeus', 'char-ade'];
+        const characterClasses = ['char-cannavacciuolo', 'char-mysterychef', 'char-ade'];
+        const characterNames = {
+            cannavacciuolo: 'Cannavacciuolo',
+            mysterychef: 'Mystery Chef',
+            ade: 'Prof. Ade'
+        };
         const characterChats = {
-            giove: [],
-            zeus: [],
+            cannavacciuolo: [],
+            mysterychef: [],
             ade: []
         };
+
         function getCurrentCharacterClass() {
             return characterClasses[currentCharIndex];
         }
@@ -171,9 +273,12 @@
             return characters[currentCharIndex];
         }
 
+        function getDisplayName(charKey) {
+            return characterNames[charKey] || charKey;
+        }
+
 
         function swapCharacter() {
-            
             currentCharIndex = (currentCharIndex + 1) % characters.length;
             updateCharacterDisplay();
             loadCharacterChat();
@@ -201,61 +306,12 @@
             const swapBtn = document.getElementById('changeBt');
             const currentChar = getCurrentCharacter();
             
-            displayElement.textContent = currentChar;
-            displayElement.className = `char-name ${getCurrentCharacterClass()}`;
+            displayElement.textContent = getDisplayName(currentChar);
+            displayElement.className = `current-char ${getCurrentCharacterClass()}`;
             
-            swapBtn.innerHTML = ` Swap (${currentChar})`;
+            swapBtn.innerHTML = `Cambia Chef`;
         }
 
-
-        async function sendMessage(event){
-            event.preventDefault();
-            const input = document.getElementById("chatMessage");
-            const sendBtn = document.getElementById("sendBt");
-            const swapBtn = document.getElementById("changeBt");
-            const respondsDiv = document.getElementById("answers");
-            const message = input.value.trim();
-
-            if(message === ""){
-                return;
-            }
-
-            input.disabled = true;
-            sendBtn.disabled = true;
-            swapBtn.disabled = true;
-            sendBtn.textContent = 'Loading...';
-            // show loading spinner 
-
-            showMessages(message, false); // Show user message
-            characterChats[currentChar].push({ char: 'User', content: message });
-
-            try {
-                const response = await fetch("/question", {
-                    method: "POST",
-                    body: JSON.stringify({ question: message }),
-                    headers: {
-                        "Accept": "application/json",
-                        "Content-Type": "application/json"
-                    },
-                });
-                
-                const data = await response.json();
-                const answer = data.answer;
-                const isAI = data.ai === 'yes';
-                showMessages(answer, isAI);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                input.disabled = false;
-                sendBtn.disabled = false;
-                swapBtn.disabled = false;
-                sendBtn.textContent = 'Invia';
-                input.value = "";
-                input.focus();
-            }
-
-
-        }
 
         async function sendMessageUP(event){
             event.preventDefault();
@@ -275,10 +331,9 @@
             input.disabled = true;
             sendBtn.disabled = true;
             swapBtn.disabled = true;
-            sendBtn.textContent = 'Loading...';
-            // show loading spinner 
+            sendBtn.textContent = 'Caricamento...';
 
-            addMessage(message, 'User', isPrivate); // Show user message
+            addMessage(message, 'User', isPrivate);
             characterChats[currentChar].push({ char: 'User', content: message, private: isPrivate });
 
             try {
@@ -297,6 +352,7 @@
                 addMessage(answer, currentChar, isPrivate);
             } catch (err) {
                 console.error(err);
+                addMessage("Errore di connessione con lo chef...", 'error', false);
             } finally {
                 input.disabled = false;
                 sendBtn.disabled = false;
@@ -305,8 +361,6 @@
                 input.value = "";
                 input.focus();
             }
-
-
         }
 
 
@@ -314,15 +368,25 @@
         function addMessage(message, who, isPrivate=false){
             const respondsDiv = document.getElementById("answers");
             const msgElement = document.createElement('p');
-            const prefix = isPrivate ? "[privato] " : "";
+            const privateTag = isPrivate ? " [sussurro]" : "";
+            
             if (who && who !== 'User' && who !== false){
-                msgElement.textContent = `${prefix}${who}: ${message}`;
-                msgElement.style.textAlign = 'left';
-            }else{
-                msgElement.textContent = `${prefix}${message} : User`;
-                msgElement.style.textAlign = 'right';
+                msgElement.className = `msg-ai ${isPrivate ? 'msg-private' : ''}`;
+                const label = document.createElement('span');
+                label.className = 'msg-label';
+                label.textContent = `${getDisplayName(who)}${privateTag}`;
+                msgElement.appendChild(label);
+                msgElement.appendChild(document.createTextNode(message));
+            } else {
+                msgElement.className = `msg-user ${isPrivate ? 'msg-private' : ''}`;
+                const label = document.createElement('span');
+                label.className = 'msg-label';
+                label.textContent = `Tu${privateTag}`;
+                msgElement.appendChild(label);
+                msgElement.appendChild(document.createTextNode(message));
             }
             respondsDiv.appendChild(msgElement);
+            scrollToBottom();
         }
 
 
@@ -336,9 +400,6 @@
         scrollToBottom();
 
     </script>
-
-
-
 
 </body>
 </html>
