@@ -1,4 +1,8 @@
 
+// ⚙️ Cambia questo IP se esegui da un altro computer sulla LAN
+//    es: const BASE_URL = 'http://192.168.1.100';
+const BASE_URL = 'http://localhost';
+
 const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
 console.log("hello world")
@@ -20,7 +24,7 @@ async function getCatalog(){
 async function getCatalogIntoDB(){
     const data = await getCatalog()
     for (const category of data) {   
-        const response = await fetch("http://localhost/RatChef/AiAgentJunior/DBscripts/save.php", {
+        const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/save.php`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(category)  
@@ -65,7 +69,7 @@ async function saveMealIntoDB(meal) {
         ingredients:     JSON.stringify(extractIngredients(meal))
     };
 
-    const response = await fetch("http://localhost/RatChef/AiAgentJunior/DBscripts/saveMeals.php", {
+    const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/saveMeals.php`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(payload)
@@ -127,7 +131,7 @@ async function importIngredients() {
     }
 
     for (const ingredient of data.meals) {
-        const response = await fetch("http://localhost/RatChef/AiAgentJunior/DBscripts/saveIngredients.php", {
+        const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/saveIngredients.php`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(ingredient)
@@ -151,7 +155,7 @@ async function importAreas() {
     }
 
     for (const area of data.meals) {
-        const response = await fetch("http://localhost/RatChef/AiAgentJunior/DBscripts/saveAreas.php", {
+        const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/saveAreas.php`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(area)

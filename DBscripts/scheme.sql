@@ -1,34 +1,74 @@
-ALTER TABLE categories
-    DROP COLUMN strCategoryThumb,
-    DROP COLUMN strCategoryDescription;
+-- ============================================================
+--  RatChef - Schema completo DB CUCINA
+--  Copia e incolla in phpMyAdmin o qualsiasi client MySQL
+--  Funziona su un'installazione pulita
+-- ============================================================
 
-ALTER TABLE meals
-    DROP COLUMN strArea,
-    DROP COLUMN strTags,
-    DROP COLUMN strSource,
-    DROP COLUMN ingredients;
+CREATE DATABASE IF NOT EXISTS CUCINA
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
 
-ALTER TABLE meals
-    ADD COLUMN strTime VARCHAR(100),
-    ADD COLUMN strDifficulty VARCHAR(100);
+USE CUCINA;
 
-ALTER TABLE meals
-    DROP COLUMN strCategory;
+-- ------------------------------------------------------------
+--  Tabelle (DROP se esistono per reset pulito)
+-- ------------------------------------------------------------
 
-ALTER TABLE meals
-    ADD COLUMN idCategory INT,
-    ADD CONSTRAINT fk_meals_category
-        FOREIGN KEY (idCategory) REFERENCES categories(idCategory);
+DROP TABLE IF EXISTS recipeIngredients;
+DROP TABLE IF EXISTS prep;
+DROP TABLE IF EXISTS meals;
+DROP TABLE IF EXISTS ingredients;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS areas;
 
-ALTER TABLE ingredients
-    DROP COLUMN strDescription,
-    DROP COLUMN strType;
+-- ------------------------------------------------------------
+--  categories
+-- ------------------------------------------------------------
+CREATE TABLE categories (
+    idCategory  INT          NOT NULL AUTO_INCREMENT,
+    strCategory VARCHAR(255) NOT NULL,
+    PRIMARY KEY (idCategory)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-DROP TABLE IF EXISTS receipeIngredients;
+-- ------------------------------------------------------------
+--  ingredients
+-- ------------------------------------------------------------
+CREATE TABLE ingredients (
+    idIngredient  INT          NOT NULL,
+    strIngredient VARCHAR(255) NOT NULL,
+    PRIMARY KEY (idIngredient)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS recipeIngredients (
-    idIngredient INT NOT NULL,
-    idMeal       INT NOT NULL,
+-- ------------------------------------------------------------
+--  areas
+-- ------------------------------------------------------------
+CREATE TABLE areas (
+    idArea  INT          NOT NULL AUTO_INCREMENT,
+    strArea VARCHAR(255) NOT NULL,
+    PRIMARY KEY (idArea)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------
+--  meals
+-- ------------------------------------------------------------
+CREATE TABLE meals (
+    idMeal          INT          NOT NULL,
+    strMeal         VARCHAR(255) NOT NULL,
+    strInstructions TEXT,
+    strTime         VARCHAR(100),
+    strDifficulty   VARCHAR(100),
+    idCategory      INT,
+    PRIMARY KEY (idMeal),
+    CONSTRAINT fk_meals_category
+        FOREIGN KEY (idCategory) REFERENCES categories(idCategory)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------
+--  recipeIngredients  (tabella ponte meals <-> ingredients)
+-- ------------------------------------------------------------
+CREATE TABLE recipeIngredients (
+    idIngredient INT         NOT NULL,
+    idMeal       INT         NOT NULL,
     strQta       VARCHAR(50),
     strUnit      VARCHAR(50),
     PRIMARY KEY (idIngredient, idMeal),
@@ -36,17 +76,17 @@ CREATE TABLE IF NOT EXISTS recipeIngredients (
         FOREIGN KEY (idIngredient) REFERENCES ingredients(idIngredient),
     CONSTRAINT fk_ri_meal
         FOREIGN KEY (idMeal) REFERENCES meals(idMeal)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-DROP TABLE IF EXISTS prep;
-
-CREATE TABLE IF NOT EXISTS prep (
-    idPrep         INT PRIMARY KEY AUTO_INCREMENT,
+-- ------------------------------------------------------------
+--  prep  (step di preparazione di ogni ricetta)
+-- ------------------------------------------------------------
+CREATE TABLE prep (
+    idPrep         INT  NOT NULL AUTO_INCREMENT,
     strDescription TEXT,
     intProgressive INT,
-    idMeal         INT NOT NULL,
+    idMeal         INT  NOT NULL,
+    PRIMARY KEY (idPrep),
     CONSTRAINT fk_prep_meal
         FOREIGN KEY (idMeal) REFERENCES meals(idMeal)
-);
-
-DROP TABLE IF EXISTS areas;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
