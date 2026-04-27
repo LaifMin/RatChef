@@ -87,7 +87,7 @@ def save_recipe_to_db(recipe_json):
                     id_ingredient = cursor.lastrowid
 
                 cursor.execute("""
-                    INSERT INTO recipeIngredients (idIngredient, idMeal, strQta, strUnit)
+                    INSERT IGNORE INTO recipeIngredients (idIngredient, idMeal, strQta, strUnit)
                     VALUES (%s, %s, %s, %s)
                 """, (id_ingredient, id_meal, str_qta, str_unit))
 
