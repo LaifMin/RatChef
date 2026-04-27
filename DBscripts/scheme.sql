@@ -34,7 +34,7 @@ CREATE TABLE categories (
 --  ingredients
 -- ------------------------------------------------------------
 CREATE TABLE ingredients (
-    idIngredient  INT          NOT NULL,
+    idIngredient  INT          NOT NULL AUTO_INCREMENT,
     strIngredient VARCHAR(255) NOT NULL,
     PRIMARY KEY (idIngredient)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -52,7 +52,7 @@ CREATE TABLE areas (
 --  meals
 -- ------------------------------------------------------------
 CREATE TABLE meals (
-    idMeal          INT          NOT NULL,
+    idMeal          INT          NOT NULL AUTO_INCREMENT,
     strMeal         VARCHAR(255) NOT NULL,
     strInstructions TEXT,
     strTime         VARCHAR(100),
