@@ -52,15 +52,15 @@ CREATE TABLE areas (
 --  meals
 -- ------------------------------------------------------------
 CREATE TABLE meals (
-    idMeal          INT          NOT NULL AUTO_INCREMENT,
+    idMeal          INT          NOT NULL,
     strMeal         VARCHAR(255) NOT NULL,
+    strCategory     VARCHAR(255),
+    strArea         VARCHAR(255),
     strInstructions TEXT,
-    strTime         VARCHAR(100),
-    strDifficulty   VARCHAR(100),
-    idCategory      INT,
-    PRIMARY KEY (idMeal),
-    CONSTRAINT fk_meals_category
-        FOREIGN KEY (idCategory) REFERENCES categories(idCategory)
+    strTags         VARCHAR(255),
+    strSource       VARCHAR(512),
+    ingredients     TEXT,
+    PRIMARY KEY (idMeal)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------
