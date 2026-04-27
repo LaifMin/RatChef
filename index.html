@@ -247,6 +247,10 @@
         <label class="whisper-label">
             <input type="checkbox" id="privateChat"> Sussurra
         </label>
+        <label id="pdfLabel" class="whisper-label" style="display:none; cursor:pointer;">
+            <input type="file" id="pdfInput" accept=".pdf" style="display:none" onchange="uploadPDF(this)">
+            <button type="button" onclick="document.getElementById('pdfInput').click()" style="background:rgba(78,205,196,0.15);border:1px solid rgba(78,205,196,0.3);color:#4ecdc4;padding:8px 14px;font-size:13px;">📄 Carica PDF</button>
+        </label>
     </form>
 
     <script>
@@ -304,12 +308,47 @@
         function updateCharacterDisplay() {
             const displayElement = document.getElementById('display-char-tt');
             const swapBtn = document.getElementById('changeBt');
+            const pdfLabel = document.getElementById('pdfLabel');
             const currentChar = getCurrentCharacter();
             
             displayElement.textContent = getDisplayName(currentChar);
             displayElement.className = `current-char ${getCurrentCharacterClass()}`;
             
             swapBtn.innerHTML = `Cambia Chef`;
+            pdfLabel.style.display = currentChar === 'ade' ? 'flex' : 'none';
+        }
+
+
+        async function uploadPDF(input) {
+            const file = input.files[0];
+            if (!file) return;
+            input.value = '';
+
+            const sendBtn = document.getElementById('sendBt');
+            const swapBtn = document.getElementById('changeBt');
+            sendBtn.disabled = true;
+            swapBtn.disabled = true;
+
+            addMessage(`📄 PDF caricato: ${file.name}`, 'User', false);
+
+            const formData = new FormData();
+            formData.append('pdf', file);
+
+            try {
+                const response = await fetch('/upload_pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                addMessage(data.answer, 'ade', false);
+                characterChats['ade'].push({ char: 'ade', content: data.answer, private: false });
+            } catch (err) {
+                console.error(err);
+                addMessage('Errore durante il caricamento del PDF.', 'error', false);
+            } finally {
+                sendBtn.disabled = false;
+                swapBtn.disabled = false;
+            }
         }
 
 
