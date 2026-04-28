@@ -69,8 +69,8 @@ def save_recipe_to_db(recipes, db_conf):
                     id_category = cursor.lastrowid
 
                 cursor.execute(
-                    "INSERT INTO meals (strMeal, strInstructions, idCategory) VALUES (%s, %s, %s)",
-                    (meal_name, meal_data.get('strInstructions', ''), id_category)
+                    "INSERT INTO meals (strMeal, strInstructions) VALUES (%s, %s)",
+                    (meal_name, meal_data.get('strInstructions', ''))
                 )
                 id_meal = cursor.lastrowid
 
