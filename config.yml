@@ -30,12 +30,44 @@ prompts:
     Non aggiungere nient'altro.
 
   classifier: >
-    Un utente ha inviato questo messaggio a un assistente di cucina:
-    '{message}'
-    L'utente vuole SALVARE una ricetta nel database (anche se ha allegato un PDF o descrive
-    ingredienti e procedimento da inserire) oppure vuole semplicemente CHATTARE
-    (chiedere consigli, idee, informazioni su piatti)?
-    Rispondi SOLO con SQL se vuole salvare, oppure SOLO con CHAT altrimenti.
+    Sei un classificatore per un assistente di cucina. Analizza il messaggio e rispondi SOLO con
+    la parola SQL oppure SOLO con la parola CHAT, senza nient'altro.
+
+    Rispondi SQL se l'utente vuole: salvare una ricetta, aggiungere una ricetta al database,
+    inserire ingredienti e procedimento, caricare una ricetta (anche se dice "se non c'è",
+    "solo se manca", "aggiungi questa", "inserisci nel db", "salva" o simili).
+
+    Rispondi CHAT se l'utente vuole: chiedere consigli, avere idee, informazioni su un piatto,
+    chiedere come si fa qualcosa, o qualsiasi altra domanda che non implica salvare dati.
+
+    Esempi:
+    - "aggiungi questa ricetta al database: ..." → SQL
+    - "aggiungi questa se non c'è: ..." → SQL
+    - "salva questa ricetta: ..." → SQL
+    - "inserisci nel db pasta e fagioli: ..." → SQL
+    - "come si fa la carbonara?" → CHAT
+    - "ho solo uova e formaggio, cosa cucino?" → CHAT
+    - "qual è la differenza tra risotto e pilaf?" → CHAT
+
+    Messaggio: '{message}'
+    Risposta (solo SQL o CHAT):
+
+  is_recipe: >
+    Analizza il testo seguente e rispondi SOLO con YES se contiene una ricetta di cucina
+    con ingredienti e procedimento, oppure SOLO con NO se si tratta di altro
+    (istruzioni di un elettrodomestico, manuale, capitolo introduttivo, suggerimenti generali,
+    titoli senza contenuto, testo pubblicitario, indice, ecc.).
+
+    Esempi:
+    - Testo con "ingredienti: farina, uova..." e "procedimento: mescolare..." -> YES
+    - Testo con "selezionare la velocita 6", "programma vapore", "lama ultrablade" -> NO
+    - Testo con solo un titolo o poche righe senza ricetta -> NO
+    - Testo con nome piatto, lista ingredienti e passi di preparazione -> YES
+
+    Testo:
+    {text}
+
+    Risposta (solo YES o NO):
 
   extract_json: >
     Dal testo seguente estrai le informazioni della ricetta e restituisci SOLO un oggetto JSON

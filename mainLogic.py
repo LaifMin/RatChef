@@ -53,6 +53,16 @@ def classify_intent(prompt: str) -> str:
     return 'SQL' if 'SQL' in answer.content.strip().upper() else 'CHAT'
 
 
+def is_recipe_chunk(text: str) -> bool:
+    """Controlla se un chunk di testo e effettivamente una ricetta di cucina.
+    Usa il classifier veloce per filtrare manuali, istruzioni, capitoli vuoti ecc."""
+    message = config['prompts']['is_recipe'].format(text=text[:800])
+    answer  = classifierModel.invoke([('human', message)])
+    result  = answer.content.strip().upper()
+    logging.info(f'is_recipe_chunk → {result} | inizio: {text[:60]!r}')
+    return 'YES' in result
+
+
 def pdf_to_recipe_chunks(pdf_path: str) -> list[str]:
     """Carica un PDF e restituisce una lista di testi, uno per ricetta.
     Strategia: divide per pagina, poi raggruppa pagine consecutive che
@@ -345,6 +355,9 @@ def process_and_save(text: str = None, pdf_file=None):
 
         for chunk in recipe_chunks:
             try:
+                if not is_recipe_chunk(chunk):
+                    logging.info(f'Chunk scartato (non ricetta): {chunk[:60]!r}')
+                    continue
                 recipe = extract_recipe_json(chunk)
                 validate_recipe(recipe)
                 if is_duplicate(recipe['name']):
