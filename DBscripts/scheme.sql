@@ -55,6 +55,8 @@ CREATE TABLE meals (
     idMeal          INT          NOT NULL AUTO_INCREMENT,
     strMeal         VARCHAR(255) NOT NULL,
     strInstructions TEXT,
+    strTime         VARCHAR(50),
+    strDifficulty   VARCHAR(50),
     idCategory      INT,
     PRIMARY KEY (idMeal),
     CONSTRAINT fk_meals_category
