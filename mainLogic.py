@@ -1,207 +1,334 @@
 import os
+import re
 import yaml
 import logging
-import re
 import json
-import copy
-import traceback
-from io import BytesIO
-from pypdf import PdfReader
+import tempfile
+import pymysql
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from langchain_ollama import ChatOllama
-from langchain_ollama import OllamaEmbeddings
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_community.vectorstores import InMemoryVectorStore
-from db_utils import save_recipe_to_db, format_save_results, get_existing_meal_names
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 with open("config.yml", 'r') as f:
     config = yaml.safe_load(f)
 
-db_conf = config['db']
-
 app = Flask(__name__, template_folder=".")
 logging.basicConfig(level=logging.INFO)
 
-agentModel = ChatOllama(model=config['models']['ai'], temperature=0.7, reasoning=False)
 
-embeddings  = OllamaEmbeddings(model=config['models']['embed'])
+agentModel      = ChatOllama(model=config['models']['ai'],  temperature=0.7, reasoning=False)
+classifierModel = ChatOllama(model=config['models']['ai'],  temperature=0,   reasoning=False)
+
+# RAG principale (ricette gia nel DB)
+embeddings    = OllamaEmbeddings(model=config['models']['embed'])
 vectorStoring = InMemoryVectorStore.load(config['rag_db_path'], embeddings)
-retriever   = vectorStoring.as_retriever()
+retriever     = vectorStoring.as_retriever()
 
 
-context = [
-    ('system', config['prompts']['default']),
-    ('system', '')
-]
-context1 = [('system', config['prompts']['Cannavacciuolo']), ('system', '')]
-context2 = [('system', config['prompts']['MysteryChef']),    ('system', '')]
-context3 = [('system', config['prompts']['ade']),            ('system', '')]
-
-contextDictionary = {
-    'Cannavacciuolo': context1,
-    'MysteryChef':    context2,
-    'Ade':            context3
-}
-private_contexts = {
-    'Cannavacciuolo': [('system', config['prompts']['Cannavacciuolo']), ('system', '')],
-    'MysteryChef':    [('system', config['prompts']['MysteryChef']),    ('system', '')],
-    'Ade':            [('system', config['prompts']['ade']),            ('system', '')]
-}
-
-
-def generate_answer(user_prompt):
-    context.append(('human', user_prompt))
-    docs = retriever.invoke(user_prompt)
-    doc_text = "Usa queste informazioni:\n" + "\n".join(d.page_content for d in docs)
-    context[1] = ('system', doc_text)
-    answer = agentModel.invoke(context).content
-    context.append(('ai', answer))
-    return answer
-
-
-def generate_answerMC(user_prompt, character_name, is_private=False):
-    target_context = copy.deepcopy(
-        private_contexts[character_name] if is_private else contextDictionary[character_name]
+def get_db():
+    return pymysql.connect(
+        host=config['db']['host'],
+        user=config['db']['user'],
+        password=config['db']['pass'],
+        database=config['db']['name'],
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor
     )
 
-    if character_name == 'Ade':
-        existing = get_existing_meal_names(db_conf)
-        existing_str = ', '.join(existing) if existing else 'nessuna'
-        doc_text = (
-            f"Ricette già nel database (NON reinserire queste): {existing_str}\n"
-            "Estrai SOLO ricette non presenti in questa lista."
-        )
-    else:
-        docs = retriever.invoke(user_prompt)
-        doc_text = "Usa queste informazioni:\n" + "\n".join(d.page_content for d in docs)
 
-    target_context[1] = ('system', doc_text)
-    target_context.append(('human', user_prompt))
-    return agentModel.invoke(target_context).content
+def is_prompt_safe(prompt: str) -> bool:
+    message = config['prompts']['secure'].format(message=prompt.lower())
+    answer  = classifierModel.invoke([('human', message)])
+    return 'unsafe' not in answer.content.lower()
 
 
-def extract_json_from_text(text):
-    text = re.sub(r'```(?:json)?', '', text).strip()
-    match = re.search(r'(\[.*\]|\{.*\})', text, re.DOTALL)
-    if not match:
-        return None
+def classify_intent(prompt: str) -> str:
+    """Restituisce 'SQL' oppure 'CHAT'."""
+    message = config['prompts']['classifier'].format(message=prompt)
+    answer  = classifierModel.invoke([('human', message)])
+    return 'SQL' if 'SQL' in answer.content.strip().upper() else 'CHAT'
+
+
+def pdf_to_text(pdf_path: str) -> str:
+    """Carica un PDF in un VectorStore temporaneo e restituisce i chunk rilevanti."""
+    loader   = PyPDFLoader(pdf_path)
+    docs     = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks   = splitter.split_documents(docs)
+
+    tmp_vs        = InMemoryVectorStore.from_documents(chunks, embeddings)
+    tmp_retriever = tmp_vs.as_retriever(search_kwargs={'k': 10})
+
+    relevant = tmp_retriever.invoke('recipe name ingredients preparation steps')
+    return '\n\n'.join([d.page_content for d in relevant])
+
+
+def _clean_json(raw: str) -> str:
+    """Rimuove trailing comma prima di ] o } per rendere il JSON valido."""
+    raw = re.sub(r',\s*([}\]])', r'\1', raw)
+    return raw
+
+
+def extract_recipe_json(text: str) -> dict:
+    """Chiede all'AI di estrarre dati strutturati in JSON dal testo."""
+    prompt = config['prompts']['extract_json'].format(text=text)
+    answer = agentModel.invoke([('human', prompt)])
+    raw    = answer.content.strip()
+    # Rimuove fence markdown se presenti
+    raw    = re.sub(r'^```[a-zA-Z]*\n?', '', raw, flags=re.MULTILINE)
+    raw    = raw.replace('```', '').strip()
+    raw    = _clean_json(raw)
     try:
-        parsed = json.loads(match.group())
-        if isinstance(parsed, dict):
-            parsed = [parsed]
-        return [r for r in parsed if r.get('meal', {}).get('strMeal', '').strip()]
-    except json.JSONDecodeError:
-        return None
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON non parsabile anche dopo cleanup: {e}\nRaw:\n{raw}")
+        raise
 
 
-def extract_recipes_from_text(raw_text):
-    existing = get_existing_meal_names(db_conf)
-    existing_str = ', '.join(existing) if existing else 'nessuna'
+def validate_recipe(data: dict):
+    """Whitelist sui campi: nessun campo fuori schema puo passare."""
+    required = {'name', 'ingredients', 'steps'}
+    if not required.issubset(data.keys()):
+        raise ValueError(f"Campi obbligatori mancanti: {required - data.keys()}")
 
-    chunks = [c.strip() for c in re.split(r'\n{3,}|\f', raw_text) if len(c.strip()) > 80]
-    if not chunks:
-        chunks = [raw_text[:6000]]
+    allowed_top  = {'name', 'category', 'instructions', 'time', 'difficulty', 'ingredients', 'steps'}
+    allowed_ing  = {'name', 'quantity', 'unit'}
+    allowed_step = {'number', 'description'}
 
-    all_recipes = []
-    for chunk in chunks:
-        prompt = (
-            "Ricette già nel database (non reinserire): " + existing_str + "\n\n"
-            "Dal testo seguente estrai le ricette non ancora presenti e restituisci SOLO un array JSON, "
-            "senza backtick né altro testo:\n"
-            '[{"meal":{"strMeal":"","strInstructions":"","strTime":"","strDifficulty":"","idCategory":""},'
-            '"ingredients":[{"strIngredient":"","strQta":"","strUnit":""}],'
-            '"prep":[{"strDescription":"","intProgressive":1}]}]\n\n'
-            "TESTO:\n" + chunk[:3000]
-        )
-        response = agentModel.invoke([('human', prompt)]).content
-        parsed = extract_json_from_text(response)
-        if parsed:
-            all_recipes.extend(parsed)
+    extra = set(data.keys()) - allowed_top
+    if extra:
+        raise ValueError(f"Campi non permessi nella ricetta: {extra}")
 
-    return all_recipes
+    for ing in data.get('ingredients', []):
+        bad = set(ing.keys()) - allowed_ing
+        if bad:
+            raise ValueError(f"Campi non permessi nell'ingrediente: {bad}")
+
+    for step in data.get('steps', []):
+        bad = set(step.keys()) - allowed_step
+        if bad:
+            raise ValueError(f"Campi non permessi nello step: {bad}")
+
+def is_duplicate(meal_name: str) -> bool:
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SELECT idMeal FROM meals WHERE strMeal = %s', (meal_name,))
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def insert_recipe(data: dict) -> int:
+    """Insert completo con query parametrizzate.
+    Nessuna stringa SQL generata dall'AI viene mai eseguita."""
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            # Categoria
+            cat_name = data.get('category', 'Generale')
+            cur.execute('SELECT idCategory FROM categories WHERE strCategory = %s', (cat_name,))
+            row = cur.fetchone()
+            if row:
+                cat_id = row['idCategory']
+            else:
+                cur.execute('INSERT INTO categories (strCategory) VALUES (%s)', (cat_name,))
+                cat_id = cur.lastrowid
+
+            # Prossimo idMeal
+            cur.execute('SELECT COALESCE(MAX(idMeal), 0) + 1 AS next_id FROM meals')
+            meal_id = cur.fetchone()['next_id']
+
+            # Meal
+            cur.execute(
+                'INSERT INTO meals (idMeal, strMeal, strInstructions, strTime, strDifficulty, idCategory) '
+                'VALUES (%s, %s, %s, %s, %s, %s)',
+                (meal_id, data['name'], data.get('instructions', ''),
+                 data.get('time', ''), data.get('difficulty', ''), cat_id)
+            )
+
+            # Ingredienti
+            for ing in data.get('ingredients', []):
+                ing_name = ing.get('name', '').strip()
+                cur.execute('SELECT idIngredient FROM ingredients WHERE strIngredient = %s', (ing_name,))
+                ing_row = cur.fetchone()
+                if ing_row:
+                    ing_id = ing_row['idIngredient']
+                else:
+                    cur.execute('SELECT COALESCE(MAX(idIngredient), 0) + 1 AS next_id FROM ingredients')
+                    ing_id = cur.fetchone()['next_id']
+                    cur.execute('INSERT INTO ingredients (idIngredient, strIngredient) VALUES (%s, %s)',
+                                (ing_id, ing_name))
+
+                cur.execute(
+                    'INSERT IGNORE INTO recipeIngredients (idIngredient, idMeal, strQta, strUnit) '
+                    'VALUES (%s, %s, %s, %s)',
+                    (ing_id, meal_id, ing.get('quantity', ''), ing.get('unit', ''))
+                )
+
+            # Step di preparazione
+            for step in data.get('steps', []):
+                cur.execute(
+                    'INSERT INTO prep (strDescription, intProgressive, idMeal) VALUES (%s, %s, %s)',
+                    (step.get('description', ''), step.get('number', 0), meal_id)
+                )
+
+        conn.commit()
+        return meal_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def save_uploaded_pdf(pdf_file) -> str:
+    """Salva il file Flask in un path temporaneo e restituisce il path.
+    Il chiamante e responsabile di eliminare il file con os.unlink()."""
+    suffix = os.path.splitext(pdf_file.filename)[1] or '.pdf'
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)                    # chiude subito il file descriptor
+    pdf_file.save(tmp_path)         # Flask scrive nel path
+    return tmp_path
+
+def build_context(character: str, history: list) -> list:
+    """history e una lista di {role: 'human'|'ai', content: '...'}"""
+    base = config['prompts'].get(character, config['prompts']['default'])
+    ctx  = [('system', base), ('system', '')]
+    for msg in history:
+        role = 'human' if msg.get('role') == 'human' else 'ai'
+        ctx.append((role, msg.get('content', '')))
+    return ctx
+
+
+def generate_chat(user_prompt: str, character: str, history: list) -> str:
+    ctx = build_context(character, history)
+    ctx.append(('human', user_prompt))
+
+    relevant = retriever.invoke(user_prompt)
+    doc_text = ('Usa queste informazioni sulle ricette per rispondere:\n'
+                + '\n'.join([d.page_content for d in relevant])
+                + '\nSe non conosci la risposta, di che non lo sai.\n')
+    ctx[1] = ('system', doc_text)
+
+    return agentModel.invoke(ctx).content
 
 
 @app.route('/')
 def index():
-    return render_template('index.html', history=context)
+    return render_template('index.html')
 
 
-@app.route('/question', methods=['POST'])
-def question():
-    body = request.get_json()
-    answer = generate_answer(body.get('question', ''))
-    return jsonify({'answer': answer, 'ai': 'yes'})
+def chat_compat(data: dict, character: str):
+    """Handler condiviso per tutte le vecchie route /cannavacciuolo ecc."""
+    prompt  = (data.get('question') or '').strip()
+    history = data.get('history', [])
+
+    if not prompt:
+        return jsonify({'error': 'Domanda vuota.'}), 400
+
+    if not is_prompt_safe(prompt):
+        logging.warning('Messaggio non sicuro bloccato.')
+        return jsonify({'error': 'Il messaggio e stato rilevato come non sicuro.'}), 400
+
+    answer = generate_chat(prompt, character, history)
+    return jsonify({'answer': answer, 'character': character.lower()})
 
 
-@app.route('/cannavacciuolo', methods=['POST'])
-def cannavacciuolo():
-    body = request.get_json()
-    answer = generate_answerMC(body.get('question', ''), 'Cannavacciuolo', body.get('private', False))
-    return jsonify({'answer': answer, 'char': 'cannavacciuolo'})
+@app.route('/chat', methods=['POST'])
+def chat():
+    data      = request.get_json()
+    character = data.get('character', 'default')
+    valid     = ('default', 'Cannavacciuolo', 'MysteryChef', 'Ade')
+    if character not in valid:
+        return jsonify({'error': 'Personaggio non valido.'}), 400
+    return chat_compat(data, character)
+
+@app.route('/question',        methods=['POST'])
+def question():        return chat_compat(request.get_json(), 'default')
+
+@app.route('/cannavacciuolo',  methods=['POST'])
+def cannavacciuolo():  return chat_compat(request.get_json(), 'Cannavacciuolo')
+
+@app.route('/mysterychef',     methods=['POST'])
+def mysterychef():     return chat_compat(request.get_json(), 'MysteryChef')
+
+@app.route('/ade',             methods=['POST'])
+def ade():             return chat_compat(request.get_json(), 'Ade')
 
 
-@app.route('/mysterychef', methods=['POST'])
-def mysterychef():
-    body = request.get_json()
-    answer = generate_answerMC(body.get('question', ''), 'MysteryChef', body.get('private', False))
-    return jsonify({'answer': answer, 'char': 'mysterychef'})
+def process_and_save(text: str = None, pdf_file=None):
+    """Logica condivisa: estrae, valida e inserisce la ricetta."""
+    if pdf_file:
+        tmp_path = save_uploaded_pdf(pdf_file)
+        try:
+            text = pdf_to_text(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
+    recipe = extract_recipe_json(text)
+    validate_recipe(recipe)
 
-@app.route('/ade', methods=['POST'])
-def ade():
-    try:
-        body       = request.get_json()
-        user_text  = body.get('question', '')
-        is_private = body.get('private', False)
+    if is_duplicate(recipe['name']):
+        return {'status': 'duplicate',
+                'answer': f"La ricetta '{recipe['name']}' e gia presente nel database."}
 
-        response_text = generate_answerMC(user_text, 'Ade', is_private)
-        parsed = extract_json_from_text(response_text)
-
-        if parsed:
-            results = save_recipe_to_db(parsed, db_conf)
-            return jsonify({'answer': format_save_results(results), 'char': 'ade'})
-
-        return jsonify({'answer': response_text, 'char': 'ade'})
-
-    except Exception as e:
-        logging.error(f"Errore /ade: {e}")
-        return jsonify({'answer': f"Errore interno: {e}", 'char': 'ade'}), 500
+    meal_id = insert_recipe(recipe)
+    return {'status': 'success',
+            'answer': f"Ricetta '{recipe['name']}' salvata con successo (ID {meal_id})."}
 
 
 @app.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
+    """Route chiamata dal frontend (pulsante PDF del Prof. Ade)."""
+    pdf_file = request.files.get('pdf')
+    if not pdf_file:
+        return jsonify({'answer': 'Nessun file PDF ricevuto.'}), 400
+
     try:
-        if 'pdf' not in request.files:
-            return jsonify({'answer': 'Nessun file PDF fornito.', 'char': 'ade'}), 400
-
-        reader = PdfReader(BytesIO(request.files['pdf'].read()))
-        text   = ''.join(page.extract_text() or '' for page in reader.pages)
-
-        if not text.strip():
-            return jsonify({'answer': 'Impossibile estrarre testo dal PDF.', 'char': 'ade'}), 400
-
-        recipes = extract_recipes_from_text(text)
-        if not recipes:
-            return jsonify({'answer': 'Nessuna ricetta trovata nel PDF.', 'char': 'ade'}), 400
-
-        results = save_recipe_to_db(recipes, db_conf)
-        return jsonify({'answer': format_save_results(results), 'char': 'ade'})
-
+        result = process_and_save(pdf_file=pdf_file)
+        return jsonify(result)
+    except json.JSONDecodeError:
+        logging.exception('Estrazione JSON fallita')
+        return jsonify({'answer': 'Non sono riuscito a estrarre una ricetta strutturata dal PDF. '
+                                  'Prova con un ricettario piu semplice o inviami il testo direttamente.'}), 400
+    except ValueError as e:
+        return jsonify({'answer': f'Dati ricetta non validi: {e}'}), 400
     except Exception as e:
-        logging.error(f"Errore /upload_pdf: {e}")
-        traceback.print_exc()
-        return jsonify({'answer': f"Errore: {e}", 'char': 'ade'}), 500
+        logging.exception('Errore salvataggio PDF')
+        return jsonify({'answer': 'Errore interno durante il salvataggio della ricetta.'}), 500
 
 
-@app.route('/dataManager', methods=['POST'])
-def dataManager():
-    body = request.get_json()
-    answer = generate_answer(body.get('question', ''))
-    return jsonify({'answer': answer, 'ai': 'yes'})
+@app.route('/save_recipe', methods=['POST'])
+def save_recipe():
+    """Route alternativa: accetta JSON {question} oppure form-data con pdf."""
+    pdf_file = request.files.get('pdf')
+    prompt   = (request.form.get('question') or
+                (request.get_json(silent=True) or {}).get('question', '')).strip()
+
+    if not prompt and not pdf_file:
+        return jsonify({'error': 'Invia testo o un file PDF.'}), 400
+    if prompt and not is_prompt_safe(prompt):
+        return jsonify({'error': 'Il messaggio e stato rilevato come non sicuro.'}), 400
+
+    try:
+        result = process_and_save(text=prompt or None, pdf_file=pdf_file)
+        return jsonify(result)
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Risposta AI non valida: JSON non parsabile.'}), 400
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception:
+        logging.exception('Errore salvataggio ricetta')
+        return jsonify({'error': 'Errore interno durante il salvataggio.'}), 500
 
 
-CORS(app, resources={r"/*": {"origins": "*"}})
 
-if __name__ == "__main__":
+CORS(app, resources={r'/*': {'origins': '*'}})
+
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=config['server_portc'], debug=True)
