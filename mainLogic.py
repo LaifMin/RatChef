@@ -20,8 +20,8 @@ app = Flask(__name__, template_folder=".")
 logging.basicConfig(level=logging.INFO)
 
 
-agentModel      = ChatOllama(model=config['models']['ai'],  temperature=0.7, reasoning=False)
-classifierModel = ChatOllama(model=config['models']['ai'],  temperature=0,   reasoning=False)
+agentModel      = ChatOllama(model=config['models']['ai'],         temperature=0.7, reasoning=False)
+classifierModel = ChatOllama(model=config['models']['classifier'], temperature=0,   reasoning=False)
 
 # RAG principale (ricette gia nel DB)
 embeddings    = OllamaEmbeddings(model=config['models']['embed'])
@@ -53,18 +53,72 @@ def classify_intent(prompt: str) -> str:
     return 'SQL' if 'SQL' in answer.content.strip().upper() else 'CHAT'
 
 
+def pdf_to_recipe_chunks(pdf_path: str) -> list[str]:
+    """Carica un PDF e restituisce una lista di testi, uno per ricetta.
+    Strategia: divide per pagina, poi raggruppa pagine consecutive che
+    appartengono alla stessa ricetta chiedendo all'AI di identificare i confini."""
+    loader = PyPDFLoader(pdf_path)
+    pages  = loader.load()   # una Document per pagina
+
+    if not pages:
+        return []
+
+    # Splitter fine per identificare sezioni ricetta dentro una pagina
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1500, chunk_overlap=100,
+        separators=['\n\n', '\n', ' ']
+    )
+
+    # Raggruppa il testo di ogni pagina; cerca titoli ricetta come separatori
+    # Un titolo ricetta tipico inizia riga da solo, tutto maiuscolo o con pattern noto
+    recipe_pattern = re.compile(
+        r'^(?=[A-ZÀÈÌÒÙ][A-Za-zÀ-ÿ\s]{3,60}$)',
+        re.MULTILINE
+    )
+
+    all_text  = '\n\n--- PAGINA ---\n\n'.join(p.page_content for p in pages)
+    # Suddivide per separatore di pagina e poi cerca boundary ricetta
+    raw_chunks = re.split(r'\n\n--- PAGINA ---\n\n', all_text)
+
+    # Accumula testo finché non trova un nuovo titolo ricetta (euristica semplice)
+    recipes   : list[str] = []
+    current   : list[str] = []
+
+    for page_text in raw_chunks:
+        lines = page_text.strip().splitlines()
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # Heuristica: riga corta (< 60 char), non vuota, che sembra un titolo
+            # e non è la prima riga in assoluto → nuovo boundary
+            is_title = (
+                stripped
+                and len(stripped) < 60
+                and stripped[0].isupper()
+                and not stripped.endswith(',')
+                and not stripped.endswith(':')
+                and current  # non al primissimo elemento
+            )
+            if is_title and i == 0 and current:
+                # Nuova pagina che inizia con titolo → salva ricetta precedente
+                recipes.append('\n'.join(current))
+                current = [line]
+            else:
+                current.append(line)
+
+    if current:
+        recipes.append('\n'.join(current))
+
+    # Filtra chunk troppo corti (intestazioni, pagine bianche, ecc.)
+    recipes = [r for r in recipes if len(r.strip()) > 150]
+
+    logging.info(f'PDF suddiviso in {len(recipes)} chunk-ricetta')
+    return recipes
+
+
 def pdf_to_text(pdf_path: str) -> str:
-    """Carica un PDF in un VectorStore temporaneo e restituisce i chunk rilevanti."""
-    loader   = PyPDFLoader(pdf_path)
-    docs     = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks   = splitter.split_documents(docs)
-
-    tmp_vs        = InMemoryVectorStore.from_documents(chunks, embeddings)
-    tmp_retriever = tmp_vs.as_retriever(search_kwargs={'k': 10})
-
-    relevant = tmp_retriever.invoke('recipe name ingredients preparation steps')
-    return '\n\n'.join([d.page_content for d in relevant])
+    """Compatibilità: restituisce tutto il testo del PDF come stringa unica."""
+    chunks = pdf_to_recipe_chunks(pdf_path)
+    return '\n\n'.join(chunks)
 
 
 def _clean_json(raw: str) -> str:
@@ -246,6 +300,19 @@ def chat():
     valid     = ('default', 'Cannavacciuolo', 'MysteryChef', 'Ade')
     if character not in valid:
         return jsonify({'error': 'Personaggio non valido.'}), 400
+
+    prompt = (data.get('question') or '').strip()
+    if prompt and is_prompt_safe(prompt):
+        intent = classify_intent(prompt)
+        logging.info(f'Intent classificato: {intent}')
+        if intent == 'SQL':
+            try:
+                result = process_and_save(text=prompt)
+                return jsonify(result)
+            except Exception as e:
+                logging.warning(f'Salvataggio testo fallito, fallback a chat: {e}')
+                # Se l'estrazione fallisce (testo troppo vago) cade in chat normalmente
+
     return chat_compat(data, character)
 
 @app.route('/question',        methods=['POST'])
@@ -262,14 +329,44 @@ def ade():             return chat_compat(request.get_json(), 'Ade')
 
 
 def process_and_save(text: str = None, pdf_file=None):
-    """Logica condivisa: estrae, valida e inserisce la ricetta."""
+    """Logica condivisa: estrae, valida e inserisce le ricette.
+    Se arriva un PDF tenta di salvare TUTTE le ricette trovate.
+    Se arriva testo salva quella singola ricetta."""
     if pdf_file:
         tmp_path = save_uploaded_pdf(pdf_file)
         try:
-            text = pdf_to_text(tmp_path)
+            recipe_chunks = pdf_to_recipe_chunks(tmp_path)
         finally:
             os.unlink(tmp_path)
 
+        saved      = []
+        duplicates = []
+        errors     = []
+
+        for chunk in recipe_chunks:
+            try:
+                recipe = extract_recipe_json(chunk)
+                validate_recipe(recipe)
+                if is_duplicate(recipe['name']):
+                    duplicates.append(recipe['name'])
+                else:
+                    meal_id = insert_recipe(recipe)
+                    saved.append(f"{recipe['name']} (ID {meal_id})")
+                    logging.info(f"Salvata: {recipe['name']} ID={meal_id}")
+            except Exception as e:
+                logging.warning(f'Chunk saltato ({e}): {chunk[:80]}...')
+                errors.append(str(e))
+
+        parts = []
+        if saved:      parts.append(f"Salvate {len(saved)} ricette: " + ', '.join(saved))
+        if duplicates: parts.append(f"Già presenti: " + ', '.join(duplicates))
+        if errors:     parts.append(f"{len(errors)} chunk non riconosciuti come ricette")
+        if not parts:  parts.append('Nessuna ricetta trovata nel PDF.')
+
+        status = 'success' if saved else ('duplicate' if duplicates else 'error')
+        return {'status': status, 'answer': ' | '.join(parts)}
+
+    # Flusso testo singolo
     recipe = extract_recipe_json(text)
     validate_recipe(recipe)
 

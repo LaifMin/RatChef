@@ -1,8 +1,5 @@
--- ============================================================
---  RatChef - Schema completo DB CUCINA
---  Copia e incolla in phpMyAdmin o qualsiasi client MySQL
---  Funziona su un'installazione pulita
--- ============================================================
+    
+
 
 CREATE DATABASE IF NOT EXISTS CUCINA
     CHARACTER SET utf8mb4
