@@ -3,7 +3,5 @@ flask-cors
 pyyaml
 langchain-ollama
 langchain-community
-langchain-text-splitters
 pymysql
-fpdf2
 pypdf
