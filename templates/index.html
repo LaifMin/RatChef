@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+<header>
+    <span id="title">DB Assistant</span>
+    <span id="tag">Ollama</span>
+</header>
+
+<div id="messages"></div>
+
+<form onsubmit="sendMessage(event)">
+    <input id="input" type="text" placeholder="Fai una domanda sul database..." autocomplete="off">
+    <input id="pdf-input" type="file" accept=".pdf" style="display:none" onchange="uploadPDF(this)">
+    <button id="upload-btn" type="button" onclick="document.getElementById('pdf-input').click()" title="Carica un PDF di ricette">&#128206;</button>
+    <button id="send-btn" type="submit">Invia</button>
+</form>
+
+<script src="/static/main.js"></script>
+</body>
+</html>
