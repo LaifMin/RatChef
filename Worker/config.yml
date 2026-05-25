@@ -1,0 +1,14 @@
+server_port: 8080
+
+models:
+  ai:         'gemma2:2b'
+  classifier: 'qwen2.5:0.5b'
+  max_chars_per_block: 4000
+
+db:
+  host: 'localhost'
+  name: 'CUCINA'
+  user: 'root'
+  pass: ''
+
+

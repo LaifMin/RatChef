@@ -1,8 +1,5 @@
 <?php
-/**
- * save.php  -  Import script per TheMealDB (popolamento iniziale categorie)
- * Allineato allo schema: categories(idCategory, strCategory)
- */
+
 
 header("Content-Type: application/json");
 
