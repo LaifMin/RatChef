@@ -24,7 +24,7 @@ async function getCatalog(){
 async function getCatalogIntoDB(){
     const data = await getCatalog()
     for (const category of data) {   
-        const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/save.php`, {
+        const response = await fetch(`${BASE_URL}/ratChefF/RatChef/DBscripts/save.php`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(category)  
@@ -69,7 +69,7 @@ async function saveMealIntoDB(meal) {
         ingredients:     JSON.stringify(extractIngredients(meal))
     };
 
-    const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/saveMeals.php`, {
+    const response = await fetch(`${BASE_URL}/ratChefF/RatChef/DBscripts/saveMeals.php`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(payload)
@@ -115,8 +115,6 @@ async function importAllMeals() {
     console.log(`\nDone! Imported: ${totalImported} | Skipped: ${totalSkipped}`);
 }
 
-importAllMeals();
-
 async function importIngredients() {
     const receipt = await fetch("https://www.themealdb.com/api/json/v1/1/list.php?i=list", {
         method: "GET",
@@ -131,7 +129,7 @@ async function importIngredients() {
     }
 
     for (const ingredient of data.meals) {
-        const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/saveIngredients.php`, {
+        const response = await fetch(`${BASE_URL}/ratChefF/RatChef/DBscripts/saveIngredients.php`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(ingredient)
@@ -155,7 +153,7 @@ async function importAreas() {
     }
 
     for (const area of data.meals) {
-        const response = await fetch(`${BASE_URL}/RatChef/AiAgentJunior/DBscripts/saveAreas.php`, {
+        const response = await fetch(`${BASE_URL}/ratChefF/RatChef/DBscripts/saveAreas.php`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(area)
@@ -165,5 +163,21 @@ async function importAreas() {
     }
 }
 
-importIngredients();
-importAreas();
+// Run imports in correct order: categories, areas & ingredients first, then meals
+async function main() {
+    console.log("=== Importing Categories ===");
+    await getCatalogIntoDB();
+
+    console.log("\n=== Importing Areas ===");
+    await importAreas();
+
+    console.log("\n=== Importing Ingredients ===");
+    await importIngredients();
+
+    console.log("\n=== Importing Meals ===");
+    await importAllMeals();
+
+    console.log("\n✅ All imports complete!");
+}
+
+main();

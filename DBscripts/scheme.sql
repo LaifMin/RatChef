@@ -1,4 +1,3 @@
-    
 
 
 CREATE DATABASE IF NOT EXISTS CUCINA
@@ -26,6 +25,8 @@ CREATE TABLE categories (
 CREATE TABLE ingredients (
     idIngredient  INT          NOT NULL AUTO_INCREMENT,
     strIngredient VARCHAR(255) NOT NULL,
+    strDescription TEXT,
+    strType        VARCHAR(255),
     PRIMARY KEY (idIngredient)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -33,14 +34,20 @@ CREATE TABLE ingredients (
 CREATE TABLE areas (
     idArea  INT          NOT NULL AUTO_INCREMENT,
     strArea VARCHAR(255) NOT NULL,
-    PRIMARY KEY (idArea)
+    PRIMARY KEY (idArea),
+    UNIQUE KEY uk_strArea (strArea)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
 CREATE TABLE meals (
     idMeal          INT          NOT NULL AUTO_INCREMENT,
     strMeal         VARCHAR(255) NOT NULL,
+    strCategory     VARCHAR(255),
+    strArea         VARCHAR(255),
     strInstructions TEXT,
+    strTags         VARCHAR(255),
+    strSource       TEXT,
+    ingredients     TEXT,
     strTime         VARCHAR(50),
     strDifficulty   VARCHAR(50),
     idCategory      INT,
@@ -72,3 +79,4 @@ CREATE TABLE prep (
     CONSTRAINT fk_prep_meal
         FOREIGN KEY (idMeal) REFERENCES meals(idMeal)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
