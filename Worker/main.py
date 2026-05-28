@@ -160,9 +160,21 @@ def chat():
     system_sql = f"""Sei un assistente che traduce conversazioni in SQL MariaDB. Schema: {SCHEMA}
 Tieni conto del contesto della conversazione per capire a cosa si riferisce l'utente.
 Rispondi SOLO con JSON, senza markdown.
-Se l'utente vuole leggere:              {{"sql": "SELECT ...", "possible": true, "type": "read"}}
-Se l'utente vuole inserire (aggiungi/crea/inserisci): {{"sql": "INSERT INTO ...", "possible": true, "type": "write"}}
-Se l'utente vuole modificare:           {{"sql": "UPDATE ...", "possible": true, "type": "write"}}
+
+REGOLA IMPORTANTE: La maggior parte delle domande degli utenti sono RICERCHE (type: "read").
+Usa "type": "write" SOLO se l'utente dice ESPLICITAMENTE parole come "aggiungi", "inserisci", "crea", "salva", "modifica", "aggiorna", "cambia".
+Se l'utente chiede, cerca, vuole sapere, nomina un piatto o un ingrediente, sta CERCANDO informazioni -> usa SELECT (type: "read").
+
+Esempi:
+- "un primo piatto" -> SELECT (sta cercando un primo piatto)
+- "mostrami i dolci" -> SELECT
+- "quali ricette ci sono?" -> SELECT
+- "aggiungi una ricetta di pasta" -> INSERT (type: "write")
+
+Formato risposta:
+Se l'utente cerca/chiede informazioni:    {{"sql": "SELECT ...", "possible": true, "type": "read"}}
+Se l'utente chiede ESPLICITAMENTE di inserire: {{"sql": "INSERT INTO ...", "possible": true, "type": "write"}}
+Se l'utente chiede ESPLICITAMENTE di modificare: {{"sql": "UPDATE ...", "possible": true, "type": "write"}}
 Se non puoi rispondere o non riguarda il DB: {{"sql": null, "possible": false}}
 Usa solo tabelle e colonne dello schema."""
 
