@@ -7,11 +7,7 @@ const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
 console.log("hello world")
 async function getCatalog(){
-    const receipt = await fetch ("https://www.themealdb.com/api/json/v1/1/categories.php", {
-
-    method: "GET",
-    headers: {"Content-Type": "application/json"},
-    });
+    const receipt = await fetch ("https://www.themealdb.com/api/json/v1/1/categories.php");
 
     const data = await receipt.json();
     
@@ -38,11 +34,7 @@ async function getCatalogIntoDB(){
 
 async function getMeals(letter){
 
-    const receipt = await fetch (`https://www.themealdb.com/api/json/v1/1/search.php?f=${letter}`, {
-
-    method: "GET",
-    headers: {"Content-Type": "application/json"},
-    });
+    const receipt = await fetch (`https://www.themealdb.com/api/json/v1/1/search.php?f=${letter}`);
 
     const data = await receipt.json();
 
@@ -116,10 +108,7 @@ async function importAllMeals() {
 }
 
 async function importIngredients() {
-    const receipt = await fetch("https://www.themealdb.com/api/json/v1/1/list.php?i=list", {
-        method: "GET",
-        headers: {"Content-Type": "application/json"},
-    });
+    const receipt = await fetch("https://www.themealdb.com/api/json/v1/1/list.php?i=list");
 
     const data = await receipt.json();
 
@@ -140,10 +129,7 @@ async function importIngredients() {
 }
 
 async function importAreas() {
-    const receipt = await fetch("https://www.themealdb.com/api/json/v1/1/list.php?a=list", {
-        method: "GET",
-        headers: {"Content-Type": "application/json"},
-    });
+    const receipt = await fetch("https://www.themealdb.com/api/json/v1/1/list.php?a=list");
 
     const data = await receipt.json();
 
